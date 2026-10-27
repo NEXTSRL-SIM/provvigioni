@@ -178,7 +178,10 @@ function pagBanca(f){var p=(f.pagamenti||[]).reduce(function(s,x){return s+Numbe
  return Math.min(p,Math.abs(Number(f.totale)||0));}
 function nomBanca(f){var p=(f.pagamenti||[]).reduce(function(s,x){return s+Number(x.importo||0);},0);if(p)return p;
  return (f.bonifici||[]).reduce(function(s,x){var v=Number(x.importo||0),c=Math.round((v%1)*100)===75?0.75:1;return s+v-c;},0);}
-function quotaImp(f){var t=Math.abs(Number(f.totale)||0);if(!t)return 0;return Math.round(Number(f.imponibile)*pagBanca(f)/t*100)/100;}
+/* quota di imponibile pagata in banca: se la fattura ha l'IVA (totale = imponibile + 22%) l'IVA non e' provvigione, conta l'imponibile coperto;
+   se ha il 2% sopra l'imponibile, il bonifico si riporta all'imponibile dividendo per il rapporto totale/imponibile */
+function quotaImp(f){var t=Math.abs(Number(f.totale)||0),i=Number(f.imponibile)||0,b=pagBanca(f);if(!t||!i)return 0;var r=t/i;
+ var q=Math.abs(r-1.22)<0.005?Math.min(i,b):i*b/t;return Math.round(Math.min(i,q)*100)/100;}
 function pagMese(k){return (DATI.fatture||[]).filter(function(f){return (f.mese_rif||mk(f.data))===k;}).map(function(f){return {f:f,imp:quotaImp(f)};}).concat((DATI.movimenti||[]).filter(function(m){return m.mese===k&&m.tipo==='pagato';}).map(function(m){return {f:{contanti:true,m:m},imp:Number(m.importo)};}));}
 function fattNonPagate(k){return [];}
 function cerca(r,q){var t=[titolo(r.cliente),r.cliente,dt(r.data_contratto),dt(r.bonifico),eur(r.totale),eur(r.provvigione),eur(r.imponibile),String(r.totale||''),r.stato,r.scheda?'':'manca la scheda',r.bonifico?'maturato':'in attesa non ancora',r.data_contratto?'':'manca data'].join(' ').toLowerCase();
