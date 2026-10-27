@@ -87,6 +87,7 @@ tr.rec td.cli b,tr.rec td.num{text-decoration:line-through;text-decoration-color
 .msk{background:var(--sf);border:1px solid var(--ln);border-radius:14px;width:100%;max-width:860px;box-shadow:0 20px 50px rgba(0,0,0,.3)}
 .mh2{padding:14px 18px;border-bottom:1px solid var(--ln)}.mh2 b{display:block;font-size:15px}.mh2 small{color:var(--ink3);font-size:12.5px}
 .mb{padding:14px 18px;display:flex;flex-direction:column;gap:8px}
+.pr{display:grid;grid-template-columns:minmax(0,1fr) 120px 140px 140px 32px;gap:8px;align-items:center;margin-bottom:6px}.pr input{width:100%;min-width:0}.pr-h span{font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;font-weight:800;color:var(--ink3)}.pr .val{font-family:var(--mono);font-size:13px}.pr .x{font-size:16px}.pr.spenta{opacity:.5}
 .mr{display:grid;grid-template-columns:minmax(0,1fr) 120px 140px 140px 70px 32px;gap:8px;align-items:center}
 .mr input{width:100%;min-width:0}.mr-h span{font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;font-weight:800;color:var(--ink3)}
 .mr .x{font-size:16px}
@@ -124,7 +125,7 @@ table.tm th.r:first-of-type{}
  <div class="top">
   <div><h1>Provvigioni e resoconto</h1>
    <div class="sub">Tutti i contratti firmati, nel mese della data del contratto. La provvigione matura e la riga si accende quando il cliente ha pagato l'80% del contratto (primo acconto e secondo acconto, anche a rate), secondo i bonifici in banca.</div></div>
-  <div class="filtri"><input id="fCerca" type="search" placeholder="Cerca cliente, data, importo…" aria-label="Cerca" autocomplete="off"><button class="btn pri" id="bCifre" hidden>+ Cifre libere</button><select id="fAg" aria-label="Agente" hidden></select><span class="agg" id="agg"></span></div>
+  <div class="filtri"><input id="fCerca" type="search" placeholder="Cerca cliente, data, importo…" aria-label="Cerca" autocomplete="off"><button class="btn pri" id="bCifre" hidden>+ Cifre libere</button><button class="btn" id="bPremi" hidden>Tabella premi</button><select id="fAg" aria-label="Agente" hidden></select><span class="agg" id="agg"></span></div>
  </div>
  <div class="conto" id="conto"></div><div class="conto teo-r" id="contoTeo" hidden></div><div class="agg" id="trovati" hidden></div>
  <div class="tabs" role="tablist">
@@ -144,6 +145,12 @@ table.tm th.r:first-of-type{}
    <button class="mini" id="mPiu" type="button">+ Aggiungi riga</button>
    <div class="mtot" id="mTot"></div><div class="merr" id="mErr"></div></div>
   <div class="mf"><button class="btn" id="mAnn" type="button">Annulla</button><button class="btn pri" id="mSalva" type="button">Salva</button></div></div></div>
+ <div class="vel" id="velP" hidden><div class="msk" role="dialog" aria-modal="true" aria-labelledby="pTit">
+  <div class="mh2"><div><b id="pTit">Tabella premi</b><small id="pSub">Premio del mese sull'imponibile dei contratti con data in quel mese. I premi non si sommano: vale la soglia più alta raggiunta.</small></div></div>
+  <div class="mb"><div class="pr pr-h"><span>Imponibile del mese da</span><span>Premio</span><span>Dal mese</span><span>Al mese</span><span></span></div><div id="pRighe"></div><div id="pNuove"></div>
+   <button class="mini" id="pPiu" type="button">+ Aggiungi riga</button>
+   <div class="mtot" id="pNota"></div><div class="merr" id="pErr"></div></div>
+  <div class="mf"><button class="btn" id="pAnn" type="button">Chiudi</button><button class="btn pri" id="pSalva" type="button">Salva</button></div></div></div>
  <div class="nota" id="nota"></div>
 </div>
 <script>
@@ -162,7 +169,7 @@ async function leggi(){var j=await chiama({azione:'leggi',agente_id:AG});
  if(!j.ok){$('mesi').innerHTML='<div class="vuoto"><b>'+esc(j.errore||'Non riesco a leggere le provvigioni.')+'</b></div>';$('conto').innerHTML='';return;}
  DATI=j;AG=j.agente&&j.agente.id;
  if(j.agenti&&j.agenti.length){var f=$('fAg');f.hidden=false;f.innerHTML=j.agenti.map(function(a){return '<option value="'+a.id+'"'+(a.id===AG?' selected':'')+'>'+esc(a.nome+' '+a.cognome)+'</option>';}).join('');}
- $('agg').textContent='bonifici aggiornati ogni 10 minuti';$('bCifre').hidden=!j.puo_scrivere;
+ $('agg').textContent='bonifici aggiornati ogni 10 minuti';$('bCifre').hidden=!j.puo_scrivere;$('bPremi').hidden=false;
  disegna();}
 function pagMese(k){return (DATI.fatture||[]).filter(function(f){return (f.mese_rif||mk(f.data))===k;}).map(function(f){return {f:f,imp:Number(f.imponibile)};}).concat((DATI.movimenti||[]).filter(function(m){return m.mese===k&&m.tipo==='pagato';}).map(function(m){return {f:{contanti:true,m:m},imp:Number(m.importo)};}));}
 function fattNonPagate(k){return [];}
@@ -194,8 +201,22 @@ function statoMese(m,p,t,n,nm){var r=m-p,ch;
 function cronologia(C){var arr={},pre={},per={};
  C.forEach(function(r){if(!r.data_contratto)return;var x=mk(r.data_contratto);(per[x]=per[x]||[]).push(r);if(r.bonifico&&mk(r.bonifico)>x)(arr[mk(r.bonifico)]=arr[mk(r.bonifico)]||[]).push(r);});
  Object.keys(per).forEach(function(x){var ms={};per[x].forEach(function(r){if(r.stato==='recesso'||!r.bonifico)return;var m=mk(r.bonifico)>x?mk(r.bonifico):x;ms[m]=(ms[m]||0)+Number(r.imponibile||0);});
-  var cum=0,prev=0;Object.keys(ms).sort().forEach(function(m){cum+=ms[m];var l=premio(cum,x),b=l?Number(l.bonus):0;if(b!==prev)(pre[m]=pre[m]||[]).push({da:x,inc:b-prev,liv:b,nome:l?l.nome:''});prev=b;});});
+  var cum=0,prev=0;Object.keys(ms).sort().forEach(function(m){cum+=ms[m];var l=premio(cum,x),b=l?Number(l.bonus):0;if(b!==prev)(pre[m]=pre[m]||[]).push({da:x,inc:b-prev,liv:b,soglia:l?Number(l.soglia):0,nome:l?l.nome:''});prev=b;});});
  return {arr:arr,pre:pre};}
+/* Tabella premi (Sante, 27/10): righe dell'accordo, modificabili solo da Next; per cambiare accordo si chiude la riga vecchia (Al mese) e se ne aggiunge una nuova (Dal mese) */
+function apriPremi(){var W=DATI.puo_scrivere,P=(DATI.premi||[]).slice().sort(function(a,b){return Number(a.soglia)-Number(b.soglia)||String(a.dal).localeCompare(String(b.dal));});
+ $('pTit').textContent='Tabella premi · '+(DATI.agente&&DATI.agente.nome||'');$('pErr').textContent='';$('pNuove').innerHTML='';
+ $('pRighe').innerHTML=P.length?P.map(function(p){var al=p.al?String(p.al).slice(0,7):'';return '<div class="pr" data-pid="'+p.id+'"><span class="val">'+eur(Number(p.soglia)).replace(',00 €',' €')+'</span><span class="val">'+eur(Number(p.bonus))+'</span><span class="val">'+(p.dal?nomeM(String(p.dal).slice(0,7)):'—')+'</span>'+(W?'<input type="month" class="pal" value="'+al+'" data-orig="'+al+'" aria-label="Al mese">':'<span class="val">'+(al?nomeM(al):'in corso')+'</span>')+'<span>'+(W?'<button class="x" data-ptog="'+p.id+'" aria-label="Togli">✕</button>':'')+'</span></div>';}).join(''):'<div class="altro">Nessun premio impostato.</div>';
+ $('pPiu').hidden=!W;$('pSalva').hidden=!W;$('pNota').textContent=W?'Per cambiare accordo: metti il mese di fine alle righe vecchie e aggiungi le nuove con il mese di inizio. Le righe tolte restano nello storico.':'';
+ $('velP').hidden=false;}
+function rigaPremio2(){var r=document.createElement('div');r.className='pr nuova';r.innerHTML='<input class="pso" inputmode="decimal" placeholder="48.000" aria-label="Imponibile del mese da"><input class="pbo" inputmode="decimal" placeholder="500,00" aria-label="Premio"><input class="pdal" type="month" value="'+oggi()+'" aria-label="Dal mese"><input class="pal2" type="month" aria-label="Al mese (vuoto: in corso)"><button class="x" data-via="1" type="button" aria-label="Togli riga">✕</button>';$('pNuove').appendChild(r);r.querySelector('.pso').focus();}
+async function salvaPremi(b){var nuove=[],chi=[];$('pErr').textContent='';
+ Array.prototype.forEach.call(document.querySelectorAll('#pNuove .pr'),function(r){var x={soglia:num(r.querySelector('.pso').value),bonus:num(r.querySelector('.pbo').value),dal:r.querySelector('.pdal').value,al:r.querySelector('.pal2').value||null};if(r.querySelector('.pso').value||r.querySelector('.pbo').value)nuove.push(x);});
+ for(var i=0;i<nuove.length;i++){var x=nuove[i];if(!(x.soglia>0)||!(x.bonus>0)||!x.dal||(x.al&&x.al<x.dal)){$('pErr').textContent='Riga nuova '+(i+1)+': servono imponibile, premio e mese di inizio.';return;}}
+ Array.prototype.forEach.call(document.querySelectorAll('#pRighe .pal'),function(inp){if(inp.value!==inp.dataset.orig)chi.push({id:+inp.closest('.pr').dataset.pid,al:inp.value||null});});
+ if(!nuove.length&&!chi.length){$('velP').hidden=true;return;}
+ b.disabled=true;b.textContent='Salvo…';var j=await chiama({azione:'premi_salva',agente_id:AG,nuove:nuove,chiusure:chi});b.disabled=false;b.textContent='Salva';
+ if(!j.ok){$('pErr').textContent=j.errore||'Non salvato.';return;}await leggi();apriPremi();}
 function mov(k,t){return (DATI.movimenti||[]).filter(function(m){return m.mese===k&&m.tipo===t;});}
 function disegna(){
  var Q=($('fCerca').value||'').trim().toLowerCase(),C=DATI.contratti.map(function(c,i){return Object.assign({n:i+1},c);}).filter(function(r){return !Q||cerca(r,Q);}),grp={},nomeAg=(DATI.agente&&DATI.agente.nome||'').split(' ')[0];
@@ -219,7 +240,10 @@ function disegna(){
   var fut=k!=='zz'&&k>oggi();if(fut)tLibF+=sl;tMat+=mat+vArr;tLib+=fut?0:sl;tPag+=fut?0:pg;tPrem+=pr+prArr;if(k!=='zz')prog+=mat+vArr+pr+prArr+sl-pg;var progM=prog;if(k!=='zz'){tTeo+=teo;tPremTeo+=prT;}else{tTeo+=teo;}
   rs.forEach(function(r){if(r.stato==='recesso')return;if(!r.bonifico){nAtt++;vAtt+=Number(r.provvigione||0);ATT.push(r);}else if(r.provvigione_stimata)vStim+=Number(r.provvigione||0);else if(r.stato!=='confermata'&&r.stato!=='accordo'&&r.stato!=='recesso')vConf+=Number(r.provvigione||0);});
   var tit=k==='zz'?'Data del contratto da completare':nomeM(k);
-  var head='<div class="mh"><h2>'+tit+'</h2>'+(rs.length?'<span class="chip c-ok">'+acc.length+(acc.length===1?' maturato':' maturati')+'</span>':'')+(att?'<span class="chip c-att">'+att+' in attesa</span>':'')+(late.length?'<span class="chip c-vi">conguaglio '+(vLate?eur(vLate):late.length+(late.length===1?' contratto':' contratti'))+'</span>':'')+(dopo.length?'<span class="chip c-vi">'+dopo.length+' maturano dopo</span>':'')+(arr.length||prArr?'<span class="chip c-vi">+ conguagli '+eur(vArr+prArr)+'</span>':'')+(pr?'<span class="chip c-pr">'+(prM?esc(prM.nome):'premio '+eur(pr))+'</span>':'')+'<span class="sp"></span>'+(k!=='zz'&&teo>mat+(VISTA==='c'?0:vArr)+0.5&&VISTA==='c'?'<span class="teoh">teorica '+eur(teo+prT)+'</span>':'')+'<span class="tot">'+eur(mat+vArr+pr+prArr+sl)+'</span></div>';
+  var sog=function(v){return eur(Number(v)).replace(',00 €',' €');},chipPr='';
+  if(VISTA==='c'&&prM)chipPr='<span class="chip c-pr" title="Imponibile del mese raggiunto e premio">premio '+sog(prM.soglia)+' – '+eur(Number(prM.bonus))+'</span>';
+  else if(VISTA==='m')chipPr=preK.map(function(x){return '<span class="chip c-pr" title="'+(x.da===k?'Imponibile del mese raggiunto e premio':'Premio di '+nomeM(x.da).toLowerCase()+': soglia raggiunta adesso; se prima c\'era un premio piu basso, qui c\'e\' solo la differenza')+'">premio '+(x.da!==k?MESI[+x.da.slice(5,7)-1].slice(0,3)+' ':'')+sog(x.soglia)+' – '+eur(x.inc)+'</span>';}).join('');
+  var head='<div class="mh"><h2>'+tit+'</h2>'+(rs.length?'<span class="chip c-ok">'+acc.length+(acc.length===1?' maturato':' maturati')+'</span>':'')+(att?'<span class="chip c-att">'+att+' in attesa</span>':'')+chipPr+(late.length?'<span class="chip c-vi">conguaglio '+(vLate?eur(vLate):late.length+(late.length===1?' contratto':' contratti'))+'</span>':'')+(dopo.length?'<span class="chip c-vi">'+dopo.length+' maturano dopo</span>':'')+(arr.length?'<span class="chip c-vi">+ conguagli '+eur(vArr)+'</span>':'')+'<span class="sp"></span>'+(k!=='zz'&&teo>mat+(VISTA==='c'?0:vArr)+0.5&&VISTA==='c'?'<span class="teoh">teorica '+eur(teo+prT)+'</span>':'')+'<span class="tot">'+eur(mat+vArr+pr+prArr+sl)+'</span></div>';
   var tb=rs.length?'<div class="tw"><table><colgroup><col style="width:44px"><col><col style="width:150px"><col style="width:130px"><col style="width:130px"><col style="width:150px"><col style="width:230px"></colgroup><thead><tr><th>#</th><th>Cliente</th><th>Data del contratto</th><th class="r">Totale contratto</th><th class="r">Imponibile</th><th class="r">Provvigione</th><th>Incassato dal cliente</th></tr></thead><tbody>'+
    rs.map(function(r){var on=!!r.bonifico,fuori=on&&r.data_contratto&&mk(r.bonifico)>mk(r.data_contratto);if(VISTA==='m'&&fuori)on=false;
     return '<tr class="'+(r.stato==='recesso'?'spenta rec':on?'accesa':'spenta')+'"><td class="num">'+r.n+'</td><td class="cli"><b>'+esc(titolo(r.cliente))+'</b>'+(r.stato==='recesso'?'<span class="stato rec" title="'+esc(r.accordo||'')+'">recesso</span>':r.stato==='accordo'?'<span class="stato acc" title="'+esc(r.accordo||'')+'">accordo: '+eur(r.provvigione)+'</span>':r.provvigione_stimata?'<span class="stato no" title="La scheda la compila Roberto: fino ad allora vale il calcolo teorico">manca la scheda</span>':r.stato!=='confermata'?'<span class="stato" title="Roberto l\'ha inserita, manca la conferma di Next">da confermare</span>':'')+'</td><td class="num">'+(W?'<button class="dt" data-pid="'+r.pid+'" data-cli="'+esc(titolo(r.cliente))+'" data-d="'+(r.data_contratto||'')+'" title="Data stampata sul contratto: premi per scriverla o correggerla">'+(r.data_contratto?dt(r.data_contratto):'inserisci la data')+'</button>':(r.data_contratto?dt(r.data_contratto):'<span class="altro">manca</span>'))+''+'</td><td class="num r">'+eur(r.totale)+'</td><td class="num r"'+(r.imponibile_stimato?' title="Stimato: totale diviso 1,10, manca la scheda provvigione"':'')+'>'+(r.imponibile!=null?(r.imponibile_stimato?'≈ ':'')+eur(r.imponibile):'<span class="altro">—</span>')+'</td><td class="num r"'+(r.provvigione_stimata?' title="Calcolo teorico: 10% dell\'imponibile. Lo conferma Roberto compilando la scheda."':'')+'>'+(r.stato==='recesso'?'<span class="altro">0,00 €</span>':(r.provvigione_stimata?'<span class="stim">≈ '+eur(r.provvigione)+'<small>calcolo teorico</small></span>':eur(r.provvigione)))+'</td><td>'+(VISTA==='m'&&fuori?'<span class="ent" style="color:var(--ink3)"><span class="p dot-no"></span>maturato il '+dt(r.bonifico)+'</span> <span class="chip c-vi" title="Conta nel mese in cui e\' maturato, come conguaglio">va a '+MESI[+r.bonifico.slice(5,7)-1]+'</span>':on?'<span class="ent" title="'+(r.primo_bonifico?'Primo bonifico del cliente: '+dt(r.primo_bonifico):'')+'"><span class="p dot-ok"></span>maturato il '+dt(r.bonifico)+'</span>'+(VISTA==='c'&&fuori?' <span class="chip c-vi" title="Maturata dopo la fine del mese del contratto: entra come conguaglio">dopo, a '+MESI[+r.bonifico.slice(5,7)-1]+'</span>':''):'<span class="ent" style="color:var(--ink3)"><span class="p dot-no"></span>'+(r.pct?'incassato '+r.pct+'%':'non ancora')+'</span>')+barra(r.pct)+'</td></tr>';}).join('')+'</tbody></table></div>':'';
@@ -258,10 +282,16 @@ document.addEventListener('click',async function(e){var b=e.target.closest('butt
  if(b.dataset.add){apriMaschera(b.dataset.add);return;}
  if(b.dataset.cont){apriMaschera(b.dataset.cont,'pagato');return;}
  if(b.id==='bCifre'){apriMaschera(oggi());return;}
+ if(b.id==='bPremi'){apriPremi();return;}
+ if(b.id==='pAnn'){$('velP').hidden=true;return;}
+ if(b.id==='pPiu'){rigaPremio2();return;}
+ if(b.id==='pSalva'){salvaPremi(b);return;}
+ if(b.dataset.ptog){var sp=b.parentNode;if(sp.querySelector('.scelta'))return;var c=document.createElement('span');c.className='scelta';c.innerHTML='<button class="r" data-pdel="'+b.dataset.ptog+'">Togli</button><button data-no="1">No</button>';sp.appendChild(c);return;}
+ if(b.dataset.pdel){var j=await chiama({azione:'premio_togli',id:+b.dataset.pdel});if(!j.ok){$('pErr').textContent=j.errore||'Non tolto.';return;}await leggi();apriPremi();return;}
  if(b.id==='mPiu'){aggRiga(null);return;}
  if(b.id==='mAnn'){$('vel').hidden=true;return;}
  if(b.id==='mSalva'){salva(b);return;}
- if(b.dataset.via){b.closest('.mr').remove();totale();return;}
+ if(b.dataset.via){var rr=b.closest('.mr');if(rr){rr.remove();totale();}else{rr=b.closest('.pr');if(rr)rr.remove();}return;}
  if(b.dataset.tog){var sp=b.parentNode;if(sp.querySelector('.scelta'))return;var n=+b.dataset.n||1;
   var c=document.createElement('span');c.className='scelta';
   c.innerHTML=(n>1?'<button class="r" data-del="'+b.dataset.tog+'">Solo questo mese</button><button class="r" data-dels="'+b.dataset.serie+'">Tutti i '+n+' mesi</button>':'<button class="r" data-del="'+b.dataset.tog+'">Togli</button>')+'<button data-no="1">No</button>';sp.appendChild(c);return;}
@@ -289,7 +319,7 @@ function apriMaschera(k,modo){MODO=modo==='pagato'?'pagato':'libera';$('mRighe')
 async function salva(b){var R=righe();for(var i=0;i<R.length;i++){var x=R[i];if(x.descrizione.length<2||!isFinite(x.importo)||!x.importo||!x.dal||!x.al||x.al<x.dal){$('mErr').textContent='Riga '+(i+1)+': servono descrizione, importo e i mesi.';return;}}
  if(!R.length)return;b.disabled=true;b.textContent='Salvo…';var j=await chiama({azione:'aggiungi',agente_id:AG,righe:R});b.disabled=false;b.textContent='Salva';
  if(!j.ok){$('mErr').textContent=j.errore||'Non salvato.';return;}$('vel').hidden=true;await leggi();}
-document.addEventListener('keydown',function(e){if(e.key==='Escape'){$('vel').hidden=true;$('velD').hidden=true;}});
+document.addEventListener('keydown',function(e){if(e.key==='Escape'){$('vel').hidden=true;$('velD').hidden=true;$('velP').hidden=true;}});
 $('fCerca').addEventListener('input',function(){if(DATI)disegna();});
 $('fAg').addEventListener('change',function(){AG=parseInt(this.value);leggi();});
 function tema(t){document.documentElement.setAttribute('data-theme',t==='chiaro'?'light':'dark');}
