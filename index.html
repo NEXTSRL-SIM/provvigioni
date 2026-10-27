@@ -97,8 +97,9 @@ tr.spenta td:first-child{box-shadow:inset 3px 0 0 var(--ln)}
 .teo{display:flex;justify-content:space-between;gap:10px;font-size:12.5px;color:var(--ink2);background:var(--sf2);border:1px dashed var(--ln);border-radius:8px;padding:6px 10px}.teo span:last-child{font-family:var(--mono);white-space:nowrap}
 .teo2{font-size:11.5px;color:var(--ink3);margin:3px 0 8px 2px}
 .teoh{font:500 12px var(--mono);color:var(--ink3);margin-right:10px;white-space:nowrap}
-.contoTeo{display:flex;flex-wrap:wrap;gap:6px 18px;align-items:baseline;font-size:12.5px;color:var(--ink3);background:var(--sf);border:1px dashed var(--ln);border-radius:12px;padding:9px 16px;margin-top:-8px}
-.contoTeo .tt{font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;font-weight:800}.contoTeo b{font-family:var(--mono);font-weight:600;color:var(--ink2)}.contoTeo .ris b{color:var(--ink)}
+.conto.teo-r{margin-top:-8px;border-style:dashed;background:var(--sf2)}
+.conto.teo-r>div{padding:9px 18px}.conto.teo-r .k{font-size:9.5px}.conto.teo-r .v{font-size:14px;color:var(--ink2)}.conto.teo-r .n{font-size:11px}
+.conto.teo-r .vuota{justify-content:center}.conto.teo-r .fin2 .v{color:var(--ink)}
 .bar{position:relative;height:4px;border-radius:4px;background:var(--ln);margin-top:5px;max-width:170px}.bar i{display:block;height:100%;border-radius:4px}.bar b{position:absolute;top:-2px;width:1px;height:8px;background:var(--ink3)}
 .riga.prem{color:var(--gr);font-weight:700}
 .c-pr{background:var(--grw);color:var(--gr)}.estr{font-size:12px;color:var(--ink3);line-height:1.45;margin-top:1px}
@@ -112,7 +113,7 @@ tr.spenta td:first-child{box-shadow:inset 3px 0 0 var(--ln)}
    <div class="sub">Tutti i contratti firmati, nel mese della data del contratto. La provvigione matura e la riga si accende quando il cliente ha pagato l'80% del contratto (primo acconto e secondo acconto, anche a rate), secondo i bonifici in banca.</div></div>
   <div class="filtri"><input id="fCerca" type="search" placeholder="Cerca cliente, data, importo…" aria-label="Cerca" autocomplete="off"><button class="btn pri" id="bCifre" hidden>+ Cifre libere</button><select id="fAg" aria-label="Agente" hidden></select><span class="agg" id="agg"></span></div>
  </div>
- <div class="conto" id="conto"></div><div class="contoTeo" id="contoTeo" hidden></div><div class="agg" id="trovati" hidden></div>
+ <div class="conto" id="conto"></div><div class="conto teo-r" id="contoTeo" hidden></div><div class="agg" id="trovati" hidden></div>
  <div class="tabs" role="tablist">
   <button class="tab" role="tab" id="tC" aria-selected="true">Per mese del contratto</button>
   <button class="tab" role="tab" id="tM" aria-selected="false">Per mese del bonifico</button>
@@ -200,9 +201,12 @@ function disegna(){
   '<div class="fin'+(res<0?' neg':'')+'"><span class="k">'+(res<0?'Pagato oltre il maturato':'Da pagare')+'</span><span class="v">'+eur(Math.abs(res))+'</span><span class="n">non ancora maturati: '+nAtt+' contratti, '+eur(vAtt)+'</span></div>';
  var resT=tTeo+tPremTeo+tLib-tPag;
  $('contoTeo').hidden=!!Q||VISTA!=='c';
- $('contoTeo').innerHTML='<span class="tt">Se tutto maturasse, salvo recessi</span>'+
-  '<span>Provvigioni teoriche <b>'+eur(tTeo)+'</b></span><span>+ Premi teorici <b>'+eur(tPremTeo)+'</b></span><span>+ Cifre libere <b>'+eur(tLib)+'</b></span><span>− Già pagato <b>'+eur(tPag)+'</b></span>'+
-  '<span class="ris">= '+(resT<0?'pagato oltre':'da pagare')+' <b>'+eur(Math.abs(resT))+'</b></span>';
+ $('contoTeo').innerHTML=
+  '<div><span class="k">Provvigioni teoriche</span><span class="v">'+eur(tTeo)+'</span><span class="n">tutti i contratti, salvo recessi</span></div>'+
+  '<div><span class="k"><span class="op">+</span> Premi teorici</span><span class="v">'+eur(tPremTeo)+'</span><span class="n">salvo recessi</span></div>'+
+  '<div class="vuota"><span class="n">come sopra</span></div>'+
+  '<div class="vuota"><span class="n">come sopra</span></div>'+
+  '<div class="fin2"><span class="k">'+(resT<0?'Teorico: pagato oltre':'Teorico da pagare')+'</span><span class="v">'+eur(Math.abs(resT))+'</span><span class="n">se tutto maturasse</span></div>';
  $('nota').innerHTML='<b>Da sapere.</b> I pagamenti a '+esc(nomeAg)+' arrivano da Odoo: le sue fatture e i bonifici che le hanno pagate, con l\'imponibile della parte pagata. '+(res<0?'Oggi il pagato supera le provvigioni maturate qui: le fatture comprendono contratti che non hanno ancora la loro scheda provvigione nel portale, oppure altre voci. Va completato l\'elenco delle provvigioni. ':'')+'La maturazione si legge dai bonifici in banca (Odoo), anche quelli del 2025: quando lo stesso cliente ha più contratti, i bonifici vanno sui contratti in ordine di data. La teorica conta tutti i contratti del mese come se fossero già maturati, salvo recessi; i contratti senza scheda provvigione lì valgono zero.'+(DATI.odoo_errore?' <b>Odoo:</b> '+esc(DATI.odoo_errore):'');
  $('leg').innerHTML=VISTA==='c'
   ?'<span><i style="background:var(--gr)"></i>maturato: il cliente ha pagato l\'80%</span><span><i style="background:var(--ln)"></i>non ancora all\'80%: conta nel mese del contratto quando ci arriva</span><span><i style="background:var(--vi)"></i>conguaglio: maturato dopo la fine del mese del contratto</span>'
