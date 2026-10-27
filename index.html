@@ -127,7 +127,7 @@ table.tm th.r:first-of-type{}
    <div class="sub">Tutti i contratti firmati, nel mese della data del contratto. La provvigione matura e la riga si accende quando il cliente ha pagato l'80% del contratto (primo acconto e secondo acconto, anche a rate), secondo i bonifici in banca.</div></div>
   <div class="filtri"><input id="fCerca" type="search" placeholder="Cerca cliente, data, importo…" aria-label="Cerca" autocomplete="off"><button class="btn pri" id="bCifre" hidden>+ Cifre libere</button><button class="btn" id="bPremi" hidden>Tabella premi</button><select id="fAg" aria-label="Agente" hidden></select><span class="agg" id="agg"></span></div>
  </div>
- <div class="conto" id="conto"></div><div class="conto teo-r" id="contoTeo" hidden></div><div class="agg" id="trovati" hidden></div>
+ <div class="conto" id="conto"></div><div class="conto teo-r" id="contoTeo" hidden></div><div class="conto teo-r" id="contoFt" hidden></div><div class="agg" id="trovati" hidden></div>
  <div class="tabs" role="tablist">
   <button class="tab" role="tab" id="tC" aria-selected="true">Per mese del contratto</button>
   <button class="tab" role="tab" id="tM" aria-selected="false">Cronologia della maturazione</button>
@@ -176,6 +176,8 @@ async function leggi(){var j=await chiama({azione:'leggi',agente_id:AG});
 function pagBanca(f){var p=(f.pagamenti||[]).reduce(function(s,x){return s+Number(x.importo||0);},0);
  if(!p)p=(f.bonifici||[]).reduce(function(s,x){return s+Math.floor(Number(x.importo||0));},0);
  return Math.min(p,Math.abs(Number(f.totale)||0));}
+function nomBanca(f){var p=(f.pagamenti||[]).reduce(function(s,x){return s+Number(x.importo||0);},0);if(p)return p;
+ return (f.bonifici||[]).reduce(function(s,x){var v=Number(x.importo||0),c=Math.round((v%1)*100)===75?0.75:1;return s+v-c;},0);}
 function quotaImp(f){var t=Math.abs(Number(f.totale)||0);if(!t)return 0;return Math.round(Number(f.imponibile)*pagBanca(f)/t*100)/100;}
 function pagMese(k){return (DATI.fatture||[]).filter(function(f){return (f.mese_rif||mk(f.data))===k;}).map(function(f){return {f:f,imp:quotaImp(f)};}).concat((DATI.movimenti||[]).filter(function(m){return m.mese===k&&m.tipo==='pagato';}).map(function(m){return {f:{contanti:true,m:m},imp:Number(m.importo)};}));}
 function fattNonPagate(k){return [];}
@@ -275,6 +277,14 @@ function disegna(){
   '<div><span class="k"><span class="op">+</span> Cifre libere</span><span class="v">'+eur(tLib)+'</span><span class="n">uguali</span></div>'+
   '<div><span class="k"><span class="op">−</span> Già pagato</span><span class="v">'+eur(tPag)+'</span><span class="n">uguale</span></div>'+
   '<div class="fin2"><span class="k">'+(resT<0?'Teorico: pagato oltre':'Teorico da pagare')+'</span><span class="v">'+eur(Math.abs(resT))+'</span><span class="n">se tutto maturasse</span></div>';
+ var FT=DATI.fatture||[],ftImp=FT.reduce(function(s,f){return s+Number(f.imponibile||0);},0),ftTot=FT.reduce(function(s,f){return s+Number(f.totale||0);},0),ftBan=FT.reduce(function(s,f){return s+nomBanca(f);},0);
+ $('contoFt').hidden=!!Q||!FT.length;
+ $('contoFt').innerHTML=
+  '<div><span class="k">Fatture di '+esc(nomeAg)+'</span><span class="v">'+FT.length+'</span><span class="n">emesse finora</span></div>'+
+  '<div><span class="k">Fatturato imponibile</span><span class="v">'+eur(ftImp)+'</span><span class="n">senza 2% e IVA</span></div>'+
+  '<div><span class="k">Fatturato totale</span><span class="v">'+eur(ftTot)+'</span><span class="n">come scritto in fattura</span></div>'+
+  '<div><span class="k">Pagato in banca</span><span class="v">'+eur(ftBan)+'</span><span class="n">bonifici, commissioni escluse</span></div>'+
+  '<div class="fin2"><span class="k">Fatturato non pagato in banca</span><span class="v">'+eur(Math.max(0,ftTot-ftBan))+'</span><span class="n">sul totale delle fatture</span></div>';
  $('nota').innerHTML=(ATT.length?'<b>Non ancora maturati</b> (il cliente non ha ancora pagato l\'80%): '+ATT.map(function(r){return esc(titolo(r.cliente))+' '+(r.pct||0)+'%';}).join(', ')+'.<br><br>':'')+'<b>Da sapere.</b> I pagamenti a '+esc(nomeAg)+' sono le sue fatture in Odoo pagate con i bonifici, e i contanti segnati qui: della fattura si scala l\'imponibile per la parte pagata in banca (commissioni escluse), nel mese che la fattura indica («provvigioni mese di …»), con accanto i bonifici trovati in banca. Tutto si legge dal vivo a ogni apertura della pagina. '+(res<0?'Oggi il pagato supera le provvigioni maturate qui: le fatture comprendono contratti che non hanno ancora la loro scheda provvigione nel portale, oppure altre voci. Va completato l\'elenco delle provvigioni. ':'')+'La maturazione si legge dai bonifici in banca (Odoo), anche quelli del 2025: quando lo stesso cliente ha più contratti, i bonifici vanno sui contratti in ordine di data. La teorica conta tutti i contratti del mese come se fossero già maturati, salvo recessi; i contratti senza scheda provvigione lì valgono zero.'+(DATI.odoo_errore?' <b>Odoo:</b> '+esc(DATI.odoo_errore):'');
  $('leg').innerHTML=VISTA==='c'
   ?'<span><i style="background:var(--gr)"></i>maturato: il cliente ha pagato l\'80%</span><span><i style="background:var(--ln)"></i>non ancora all\'80%: conta nel mese del contratto quando ci arriva</span><span><i style="background:var(--vi)"></i>conguaglio: maturato dopo la fine del mese del contratto</span><span class="stati"><b class="stato no">manca la scheda</b> calcolo teorico al 10% finché Roberto non la compila · <b class="stato">da confermare</b> inserita da Roberto, manca la conferma · nessuna etichetta: a posto</span>'
