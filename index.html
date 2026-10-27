@@ -175,6 +175,8 @@ window.addEventListener('message',function(e){var d=e.data||{};if(!/^https:\/\/(
 try{TOKEN=sessionStorage.getItem('portale_token')||localStorage.getItem('portale_token')||'';}catch(e){}
 if(TOKEN)leggi();
 if(window.parent!==window){try{window.parent.postMessage({tipo:'chiedi_pass'},'*');}catch(e){}}
-setTimeout(function(){if(!TOKEN)$('mesi').innerHTML='<div class="vuoto"><b>Apri questa pagina dal portale</b>Entra nel portale con il tuo nome e scegli Provvigioni e resoconto nel menu.</div>';},2500);
+setTimeout(function(){if(TOKEN)return;
+ if(window.parent!==window){$('mesi').innerHTML='<div class="vuoto"><b>Entra con il tuo nome</b>Le provvigioni si vedono solo con l\'accesso personale. <div style="margin-top:14px"><button class="btn pri" id="bEntra">Entra con il tuo nome</button></div></div>';$('bEntra').onclick=function(){try{window.parent.postMessage({tipo:'serve_accesso'},'*');}catch(e){}};}
+ else $('mesi').innerHTML='<div class="vuoto"><b>Apri questa pagina dal portale</b>Entra nel portale con il tuo nome e scegli Provvigioni e resoconto nel menu.</div>';},2500);
 </script>
 </body></html>
